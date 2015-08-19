@@ -1,0 +1,30 @@
+#ifndef TRAFFIC_MANAGER_H
+#define TRAFFIC_MANAGER_H
+
+#include "message_queue.hpp"
+#include "traffic_generator.hpp"
+
+//#include "traffic_generator.hpp"
+
+class TrafficManager {
+    // Simulation Params
+    int _message_count;
+    int _added_message_count;
+    int _removed_message_count;
+    int _width;
+    int _height;
+		int _message_size;
+		int _injection_period;
+    //TrafficGenerator _traffic_generator;
+    MessageQueue _message_queue;  
+    TrafficGenerator* _traffic_generator; 
+  public:
+    TrafficManager(int width, int height, int message_count);
+    void generate_messages(uint32_t time);
+    bool pending_socket_message(int index, uint32_t time);
+    NetworkFlit adding_message_to_network(int index, uint32_t time);
+    void removing_message_from_network(int uid);    
+    bool simulation_complete();
+
+};
+#endif

@@ -1,0 +1,76 @@
+#include "stdio.h" 
+//#include "vc_hdrs.h" 
+#include "svdpi.h" 
+#include "traffic_manager.hpp"
+#include <stdint.h>
+#include "defines.hpp"
+
+extern "C" { 
+
+
+typedef struct{ 
+int a; 
+int b; 
+
+} ShitFlit; 
+
+extern void export_func(svBitVec32 x[3] ); 
+//extern int32_t simulation_time();
+
+void* get_tm() {
+  return new TrafficManager(2,2, 100);
+}
+
+int message_generation_period() {
+  return INJECTION_RATE * MESSAGE_SIZE;
+}
+
+void init () {
+  printf("Running Initialization method");
+}
+
+void analyze() {
+  printf("Running analysis method");
+  
+}
+
+bool simulation_complete (TrafficManager* TM) {
+  return TM->simulation_complete();
+}
+
+void generate_messages(TrafficManager* TM, int32_t run_time) {
+  //printf("Running Generate Messages method at time %u\n", run_time);
+	TM->generate_messages(run_time);
+}
+
+bool has_packets_in_queue(TrafficManager* TM, int index, int32_t run_time) {
+  //printf("checking has method at time %u\n", run_time);
+  return TM->pending_socket_message(index, run_time);
+}
+
+void add_packet_to_network(TrafficManager* TM, int index, int32_t run_time, NetworkFlit* flit) {
+ //printf("checking has method at time %u\n", run_time);
+ NetworkFlit NF = TM->adding_message_to_network(index, run_time);
+ flit->address = NF.data; // weird dpi flipping thing that we cant explain
+ flit->data = NF.address;
+}
+
+void remove_packet_from_network(TrafficManager* TM, int32_t run_time, int uid) {
+  TM->removing_message_from_network(uid, run_time);
+}
+
+void import_func() { 
+ShitFlit s_data; 
+unsigned int arr[3]; 
+
+
+arr[0] = s_data.a ; 
+arr[1] = s_data.b ; 
+
+//export_func(arr); 
+
+} 
+} 
+
+
+

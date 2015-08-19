@@ -1,0 +1,143 @@
+`timescale 1ns/1ps 
+
+`include "defines.v"
+
+
+module grid8_test; 
+
+typedef struct packed{ 
+	int unsigned address; 
+	int unsigned data; 
+
+} NetworkFlit; 
+
+export "DPI-C" function export_func; 
+export "DPI-C" function simulation_time; 
+import "DPI-C" context function void import_func(); 
+import "DPI-C" function void init(); 
+import "DPI-C" function void analyze(); 
+import "DPI-C" function int message_generation_period(); 
+import "DPI-C" function chandle get_tm(); 
+import "DPI-C" function bit has_packets_in_queue(input chandle tm, input int index, int run_time); 
+import "DPI-C" function bit simulation_complete(input chandle);
+import "DPI-C" function void generate_messages(input chandle, input int run_time); 
+import "DPI-C" function void add_packet_to_network(input chandle, input int index, input int run_time, output NetworkFlit ns); 
+import "DPI-C" function void remove_packet_from_network(input chandle, input int run_time, input int data); // the data field is used to encode the uid to track flit delay on network
+
+chandle tm_inst;
+
+
+function int simulation_time();
+ return $time;
+endfunction
+
+function void export_func(input int arr[3]); 
+
+
+endfunction 
+
+	reg rst;
+  reg [(`Grid_Size * `Activity_data) - 1: 0] activity_reg; 
+	reg [((`Grid_Size * `Flit_Width)-1):0] din_C;
+	wire [((`Grid_Size * `Flit_Width)-1):0] dout_C;
+	wire [`Grid_Size-1:0] lr_C, ra_C;
+	reg [`Grid_Size-1:0] lr_C_updates, ra_C_updates; // added additional vectors to keep track of handshake state, but also allow controllers time to stabalize
+	wire [`Grid_Size-1:0] rr_C, la_C;
+
+
+task add_data_to_network (); // should pass the lr_C_updates and din as argument instead of modifying global variables (sorry future readers)
+  NetworkFlit ns;
+  for (int i = 0; i < `Grid_Size; i++) begin
+    if((la_C[i] == 1'b0 && lr_C_updates[i] != 1'b1 && lr_C[i] !=1'b1) && (has_packets_in_queue(tm_inst, i, $time) != 0)) begin
+      add_packet_to_network(tm_inst, i, $time, ns);
+      din_C[(((i+1) * `Flit_Width) - 1) -: `Address_Width] = ns.address[31 -: `Address_Width];
+      din_C[((((i+1) * `Flit_Width) - 1) - `Address_Width) -: ((`Uid_data + `Activity_data))] = {ns.data[31 -: `Uid_data], activity_reg[i*`Activity_data +: `Activity_data]};
+      activity_reg[i*`Activity_data +: `Activity_data] = ~activity_reg[i*`Activity_data +: `Activity_data];
+      lr_C_updates[i] = 1'b1;
+      $display("Adding flit with address: %h and data: %h",ns.address, ns.data);
+    end else if ((la_C[i] == 1'b1 && lr_C[i] == 1'b1) && lr_C_updates[i] == 1'b1) begin
+      lr_C_updates[i] = 1'b0;
+      $display("Setting lr_C_updates to 0");
+		
+    end else begin
+			//$display("ELSE case!");
+		end
+  end 
+endtask
+
+
+task remove_data_from_network (); // should pass the lr_C_updates and din as argument instead of modifying global variables (sorry future readers)
+  NetworkFlit ns;
+  for (int i = 0; i < `Grid_Size; i++) begin
+    if((rr_C[i] == 1'b1) && (ra_C_updates[i] != 1'b1) && (ra_C[i] != 1'b1)) begin
+      int uid;
+      uid = dout_C[((((i+1) * `Flit_Width) - 1) - `Address_Width) -: `Uid_data ];      
+      remove_packet_from_network(tm_inst, $time, uid);
+      ra_C_updates[i] = 1'b1;
+      $display("removing flit with uid: %d", uid);
+    end else if((rr_C[i] == 1'b0) && (ra_C[i] == 1'b1) && (ra_C_updates[i] == 1'b1)) begin
+      ra_C_updates[i] = 1'b0;
+      $display("Completing Cycle at index  %d", i);
+    end else begin
+    
+    end
+  end
+endtask
+
+int generate_delay = message_generation_period();
+
+always begin
+  #(generate_delay);
+  generate_messages(tm_inst, $time);
+  add_data_to_network();
+end 
+
+always @(la_C) begin
+  add_data_to_network();
+end
+
+always @(rr_C) begin
+  remove_data_from_network();
+end
+
+
+grid8 Grid8( 
+  .rst(rst), 
+  .rr_C(rr_C), 
+  .la_C(la_C), 
+  .dout_C(dout_C), 
+  .lr_C(lr_C), 
+  .ra_C(ra_C), 
+  .din_C(din_C));
+
+ assign #(2) lr_C = lr_C_updates;
+ assign #(2) ra_C = ra_C_updates;
+
+
+initial 
+begin
+  activity_reg = {(`Grid_Size * `Activity_data){2'b10}};
+  tm_inst = get_tm(); // holds the state of the entire simulation
+  
+  din_C = {(`Grid_Size*`Flit_Width){0}};
+  lr_C_updates = {`Grid_Size{0}};
+  ra_C_updates = {`Grid_Size{0}};
+  rst = 1'b1;
+  #20;
+  rst = 1'b0;
+  #20;
+	generate_messages(tm_inst, $time); 
+  do begin
+ 
+    //add_data_to_network();
+    //remove_data_from_network();
+    #1;
+    //$display("Running Loop");
+    //$display("Simulation Complete Returned  %d", simulation_complete());
+  end while(simulation_complete(tm_inst) != 0);
+	if (simulation_complete(tm_inst) == 0) begin
+		$display("Traffic Managers says simulation is complete");
+	end
+
+end 
+endmodule

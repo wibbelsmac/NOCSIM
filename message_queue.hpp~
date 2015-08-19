@@ -1,0 +1,37 @@
+#ifndef MESSAGE_QUEUE_H
+#define MESSAGE_QUEUE_H
+
+#include <vector>
+#include <queue>
+#include <map>
+#include "message.hpp"
+
+extern "C" {
+
+typedef std::map <uint32_t, Message*> MessageMap;
+typedef MessageMap::iterator MessageMapIter;
+
+class MessageQueue {
+
+    std::vector<std::queue<Message*> > _message_queues;
+    std::map <uint32_t, Message*> _completed_message_queue;
+    uint32_t _completed_messages;
+    uint32_t _queued_messages;  
+
+  public:
+    MessageQueue(int width, int height);
+    MessageQueue();
+    void add_message(int index, Message* message);
+    void add_messages(std::vector< Message* > message_vect); 
+    NetworkFlit add_flit_to_network(int index, uint32_t time);
+    void remove_flit_from_network(uint32_t uid, uint32_t time);
+    bool pending_messages(int index, uint32_t time);
+    void init(int width, int height);
+    bool received_all_messages();
+    MessageMap* gimme_the_message_map(); // not good practice but the deadline draws near
+};
+
+
+}
+
+#endif

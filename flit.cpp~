@@ -1,0 +1,19 @@
+#include "flit.hpp"
+#include "routing_table.hpp"
+
+extern "C" {
+
+Flit::Flit ()
+{
+
+}
+
+int32_t Flit::latency() {
+  return (int32_t)_leave_network_time - ((int32_t)_enter_queue_time);
+}
+int64_t Flit::transmission_time() {
+  return ((int32_t)_leave_network_time) - ((int32_t)_enter_network_time);
+}
+
+
+}

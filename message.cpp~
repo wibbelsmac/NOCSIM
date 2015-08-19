@@ -1,0 +1,197 @@
+#include "message.hpp"
+#include "routing_table.hpp"
+#include <stdio.h>
+#include <stdlib.h>
+
+extern "C" {
+
+Message::Message (uint32_t uid, uint32_t src, uint32_t dest, uint32_t message_size, uint32_t injection_rate, RoutingTable* rt)
+{
+  _uid = uid;
+	_source_index = src;
+	_destination_index = dest;
+  _address = rt->generate_route_addr32(src, dest, &_hop_count);
+  _data = uid; // TODO Change to random value for when flitwidth is larger
+  _message_size = message_size;
+  _flit_vector = new FlitPtrVector(message_size); 
+	for(int i = 0; i < _flit_vector->size(); i++) {
+  (*_flit_vector)[i] = new Flit();
+  }
+  _sent_flits = 0;
+  _received_flits = 0;
+	_injection_rate = injection_rate;
+}
+
+Message::Message ()
+{
+
+}
+
+Message::~Message ()
+{
+  for(int i = 0; i < _flit_vector->size(); i++) {
+    delete (*_flit_vector)[i];
+  }
+  delete _flit_vector;
+}
+
+void Message::adding_message_to_queue(uint32_t time) {
+   _first_enter_queue_time = time;
+   uint32_t enter_queue_time = time;
+   _queued_flits = _flit_vector->size();
+   _enter_network_time;
+   for(int i = 0; i < _flit_vector->size(); i++) {
+    (*_flit_vector)[i]->enter_queue_time(enter_queue_time);
+    enter_queue_time += _injection_rate;
+  }
+  _last_enter_queue_time = enter_queue_time;
+}
+
+
+NetworkFlitVector* Message::return_network_flit(uint32_t time, uint32_t injection_rate) {
+   NetworkFlitVector* temp_flit_vect = new NetworkFlitVector(_message_size);
+   _first_enter_queue_time = time;
+   uint32_t enter_queue_time = time;
+   _queued_flits = _flit_vector->size();
+   _enter_network_time;
+   NetworkFlit NF;
+   NF.address = _address;
+   NF.data = _uid;
+   for(int i = 0; i < _flit_vector->size(); i++) {
+    (*temp_flit_vect)[i] = NF;
+    (*_flit_vector)[i]->enter_queue_time(enter_queue_time);
+    enter_queue_time += injection_rate;
+  }
+  _last_enter_queue_time = enter_queue_time;
+  return temp_flit_vect;
+}
+
+void Message::generate_network_flit(NetworkFlit * NF) {
+   NF->address = _address;
+   NF->data = _uid;
+}
+
+bool Message::adding_flit_to_network(uint32_t ent, NetworkFlit* NF) {
+	printf("Adding_Flit_to_net sent_flits: %d _message_size %d\n",_sent_flits,_message_size);  
+	if(_sent_flits == 0)
+      _enter_network_time = ent;
+  if(_sent_flits < _message_size) {
+    (*_flit_vector)[_sent_flits]->enter_network_time(ent);
+    _sent_flits++;
+    generate_network_flit(NF);
+    return true;
+  }
+  
+  return false;
+}
+
+bool Message::removing_flit_from_network(uint32_t lnt) {
+  printf("Calling Received Flits with index %d\n", _received_flits);
+  int32_t transmission_time = (*_flit_vector)[_received_flits]->transmission_time();  
+  int32_t latency = (*_flit_vector)[_received_flits]->latency();  
+  if(_received_flits == 0) {
+    _first_leave_network_time = lnt;
+  }
+  if(_received_flits < _message_size) {
+    (*_flit_vector)[_received_flits]->leave_network_time(lnt);
+    // Transmission time analytics
+    overflow_accum_test(transmission_time, _total_flit_transmission_time); 
+    _total_flit_transmission_time += transmission_time; 
+    overflow_accum_test(latency, _total_flit_latency); 
+    _total_flit_latency += latency;
+  }
+  _received_flits++;
+   update_min_max_analytics(transmission_time, latency, _received_flits);
+  //if(_receive_flits == _message_size) {
+    _last_leave_network_time = lnt;
+  //}
+  return (_received_flits >= _message_size);
+}
+
+void Message::update_min_max_analytics(int32_t transmission_time, int32_t latency, uint32_t index) {
+  if(index ==0) {
+    _min_flit_latency = latency;  
+    _max_flit_latency = latency;  
+    _min_flit_transmission_time = transmission_time;  
+    _max_flit_transmission_time = transmission_time;  
+  } else {
+    if(latency < _min_flit_latency) {
+      _min_flit_latency = latency;
+    } else if (latency > _max_flit_latency) {
+      _max_flit_latency = latency;
+    }
+    if(transmission_time < _min_flit_transmission_time) {
+      _min_flit_transmission_time = transmission_time;
+    } else if (transmission_time > _max_flit_transmission_time) {
+      _max_flit_transmission_time = transmission_time;
+    }
+  }
+}
+
+
+
+int32_t Message::latency() {
+  return _leave_network_time - _first_enter_queue_time;
+}
+
+bool Message::message_ready(uint32_t time) {
+  if(_sent_flits < _message_size) {
+    Flit* cpp_pos_compiler = (*_flit_vector)[_sent_flits];
+    int32_t next_queue_time = cpp_pos_compiler->enter_queue_time(); 
+    printf("Sent Flits < message_size\n");
+
+    if(next_queue_time <= time) {// if there are unsent flits and no messages from the "future" woooooo
+      printf("Message available quetime %d < time %d\n", next_queue_time, time);
+      return true;
+    } else {
+      printf("NO Message available quetime %d < time %d\n", next_queue_time, time);
+      return false;
+    }
+  }
+  return false;
+}
+
+int32_t Message::total_hop_count() {
+  return _hop_count * _received_flits;
+}
+
+int Message::unsent_messages() {
+  return _message_size - _sent_flits;
+}
+
+int32_t Message::last_enter_queue_time() {
+  return _first_enter_queue_time + (_injection_rate * (_message_size -1));
+}
+
+int32_t Message::transmission_time() {
+  return _total_flit_transmission_time;
+}
+
+
+void Message::overflow_accum_test(int32_t& a, int32_t & result) {
+  int32_t ovf = a + result;
+  if(ovf < 0)
+    printf("ERROR message uint32_t overflow Detected a: %d result: %d ovf: %d",a,result,ovf);
+}
+
+bool Message::all_flits_received() {
+  return _received_flits >= _message_size;
+}
+
+double Message::offered_bandwidth() {
+  _message_size / offered_interval(); 
+}
+
+double Message::offered_interval() {
+ return _last_enter_queue_time - _first_enter_queue_time;
+}
+
+double Message::actual_bandwidth() {
+  _message_size / actual_interval();
+}
+
+double Message::actual_interval() {
+ return _last_leave_network_time - _first_leave_network_time;
+}
+
+}

@@ -1,0 +1,25 @@
+#ifndef TRAFFIC_GENERATOR_H
+#define TRAFFIC_GENERATOR_H
+
+#include <vector>
+#include "message.hpp"
+#include "routing_table.hpp"
+
+//#include "traffic_generator.hpp"
+
+class TrafficGenerator {
+    //TrafficGenerator _traffic_generator;
+    uint32_t _uid;
+    uint32_t _node_count;
+    uint32_t get_uid(); // Doesnt check for overflow but hopefully we send less than 2^32 messages
+    uint32_t rand_range(uint32_t min, uint32_t max);
+    RoutingTable * _routing_table;
+		uint32_t injection_period;
+		int _message_size;
+  public:
+    TrafficGenerator();
+    TrafficGenerator(int width, int height, int message_size, uint32_t injection_period);
+    void generate_messages(std::vector< Message *>* message_vector, uint32_t time);
+    inline void node_count(uint32_t node_count) {_node_count = node_count;};
+};
+#endif

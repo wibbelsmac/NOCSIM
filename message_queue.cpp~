@@ -1,0 +1,113 @@
+#include "message_queue.hpp"
+#include "defines.hpp"
+
+extern "C" {
+
+MessageQueue::MessageQueue (int width, int height) {
+  init(width, height);
+}
+
+
+void MessageQueue::init (int width, int height) {
+ _message_queues.resize(width * height);
+ _completed_messages = 0;
+ _queued_messages = 0;
+ _transit_flits =0;
+ _received_flits = 0;
+ _queued_flits = 0;
+ //for (int i = 0; i <(width * height); i++) {
+ // _message_queues[i].
+ //} 
+}
+
+MessageQueue::MessageQueue () {}
+
+void MessageQueue::add_message(int index, Message* msg, uint32_t time) {
+  if(!_message_queues[index].empty()) {
+    uint32_t last_flit_time =  _message_queues[index].back()->last_enter_queue_time();
+    uint32_t actual_enter_time = (time > last_flit_time) ? time : last_flit_time;
+    _queued_flits += MESSAGE_SIZE;
+    msg->adding_message_to_queue(actual_enter_time);
+  } else {
+    _queued_flits += MESSAGE_SIZE;
+    msg->adding_message_to_queue(time);
+  }
+  _message_queues[index].push(msg);
+  _completed_message_queue[msg->uid()] = msg;
+
+}
+
+void MessageQueue::add_messages(std::vector< Message* >* message_vect) {
+	printf("UNIMPLEMENTED!!!");  
+	 for (std::vector< Message* >::iterator it = message_vect->begin() ; it != message_vect->end(); it++) {
+     uint32_t index = (*it)->source_index();
+   //  _message_queue.add_messages(my_vect);
+			printf("Adding Message at index %d\n", index);
+     _message_queues[index].push(*it); 
+     _queued_messages++;
+     _queued_flits += MESSAGE_SIZE;
+   }
+
+}
+
+ 
+
+NetworkFlit MessageQueue::add_flit_to_network(int index, uint32_t time) {
+  NetworkFlit NF;
+  if(!_message_queues[index].empty()) {
+    Message * message_temp_ptr = _message_queues[index].front();
+    if(message_temp_ptr->adding_flit_to_network(time, &NF)) {
+	    printf("Adding flit %d of %d at index %d to network\n", message_temp_ptr->sent_flits(),message_temp_ptr->message_size(), index );
+      _transit_flits++; 
+      if(message_temp_ptr->unsent_messages() == 0) {
+        _message_queues[index].pop();
+      }
+     return NF;
+    }
+  } else {
+    printf("Queue is so broken\n");
+  }
+}
+
+void MessageQueue::remove_flit_from_network(uint32_t uid, uint32_t time) {
+    printf("top of remove flit messagequeue with uid %d\n", uid);
+    if(_completed_message_queue.find(uid) != _completed_message_queue.end()) {
+    printf("found message %d\n", uid);
+      _received_flits++;
+      Message* msg =_completed_message_queue[uid];
+      if(msg->removing_flit_from_network(time)) {
+    printf("msg remove with uid %d\n", uid);
+       _completed_messages++;
+      } 
+	    printf("Receiving flit %d of %d at uid %d to network\n", msg->received_flits(),msg->message_size(), uid );
+
+    } else { 
+     printf("Cannot Find Message for uid %d map size:%d\n", uid,_completed_message_queue.size());
+    }
+}
+
+bool MessageQueue::pending_messages(int index, uint32_t time) {
+	if(!_message_queues[index].empty()) {  
+			printf("Message queue is not empty\n");		
+			return (_message_queues[index].front()->message_ready(time));
+		}
+	//printf("No Messages in  queue\n");  
+	return false;
+}
+
+void MessageQueue::print_queue_stats() {
+  printf("Queued Flits: %d Transit Flits: %d Received Flits: %d\n", _queued_flits, _transit_flits, _received_flits);
+}
+
+bool MessageQueue::received_all_messages() {
+  if(_completed_messages > _queued_messages) {
+    printf("It would appear that we have some sort of message arithmetic error\n");
+  }
+  return _completed_messages >= _queued_messages;
+}
+
+MessageMap* MessageQueue::gimme_the_message_map() {
+	return &_completed_message_queue;	 
+}
+
+}

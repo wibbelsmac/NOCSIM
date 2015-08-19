@@ -1,0 +1,51 @@
+#include "traffic_generator.hpp"
+#include "message.hpp"
+#include <stdio.h>
+#include <stdint.h>
+#include <cstdlib>
+
+extern "C" {
+
+
+TrafficGenerator::TrafficGenerator(int width, int height, int message_size, uint32_t injection_period) {
+  _uid = 0;
+  _node_count = width * height;
+  _routing_table = new RoutingTable(width, height, 1, 1);
+	_message_size = message_size;
+ 	_injection_period = injection_period;
+}
+
+TrafficGenerator::TrafficGenerator() {
+  _uid = 0;
+}
+
+void TrafficGenerator::generate_messages(std::vector< Message *>* message_vector, uint32_t time) {
+	int num_of_transmitting_cores = rand_range(0, (unsigned int)_node_count-1);
+
+	for (int i=0; i < num_of_transmitting_cores; i++)
+		{
+			uint32_t src   = rand_range(0, _node_count-1);
+			uint32_t dest  = rand_range(0, _node_count-1);
+			uint32_t uid = get_uid();
+			while (src == dest) {
+        dest = rand_range(0, _node_count-1);  
+      }
+			printf("Adding Message: uid: %d  source: %d dest: %d", _uid, src, dest);      
+			Message* msg = new Message(uid, src, dest, _message_size, _injection_period, _routing_table);
+      msg->adding_message_to_queue(time);
+		  message_vector->push_back(msg); 	
+		}
+		
+	
+}
+uint32_t TrafficGenerator::get_uid() {
+  int temp = _uid;
+  _uid++;
+  return _uid;
+}
+
+uint32_t TrafficGenerator::rand_range(uint32_t min, uint32_t max)
+{
+	double scaled = (double)rand()/RAND_MAX;
+	return (max - min + 1)*scaled +min;
+}}
