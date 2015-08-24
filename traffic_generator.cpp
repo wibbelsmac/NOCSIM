@@ -5,32 +5,73 @@
 #include <cstdlib>
 #include "defines.hpp"
 #include <time.h>       /* time */
-
+#include <math.h>
 extern "C" {
 
 
-TrafficGenerator::TrafficGenerator(int width, int height, int message_size, uint32_t injection_period) {
+TrafficGenerator::TrafficGenerator(int width, int height, uint32_t injection_rate, 
+                                   double time_units_per_sec, double time_units_per_generation_period,
+                                   int message_gen_in_warm, int message_gen_in_measurement,
+                                   int message_gen_in_cooldown) {
   _uid = 0;
   _node_count = width * height;
   _routing_table = new RoutingTable(width, height, SHORT_HOP_COST, LONG_HOP_COST);
-	_message_size = message_size;
- 	_injection_period = injection_period;
+ 	_injection_rate = injection_rate;
   _generated_messages = 0;
+  _generated_flits = 0;
   _width = width;
   srand (time(NULL));
   _height = height;
+  _time_units_per_sec = time_units_per_sec;
+  _time_units_per_generation_period = time_units_per_generation_period;
+  _message_gen_in_warmup = message_gen_in_warm;
+  _message_gen_in_measurement = message_gen_in_measurement;
+  _message_gen_in_cooldown = message_gen_in_cooldown;
+  _message_generation_intervals = 0;
+  _message_gen_in_simulation = _message_gen_in_warmup + _message_gen_in_measurement + _message_gen_in_cooldown;
+
+}
+
+int TrafficGenerator::created_messages() {
+  return _last_uid_in_simulation;
+}
+
+
+int TrafficGenerator::messages_in_warmup() {
+  return _last_uid_in_warmup;
+}
+
+int TrafficGenerator::messages_in_measurement() {
+  return _last_uid_in_measurement - _last_uid_in_warmup;
 }
 
 TrafficGenerator::TrafficGenerator() {
   _uid = 0;
 }
 
+
+void TrafficGenerator::update_message_generation_intervals() {
+  _message_generation_intervals++;
+  if(_message_generation_intervals == _message_gen_in_warmup){
+    _last_uid_in_warmup = _uid; 
+  } else if(_message_generation_intervals == (_message_gen_in_warmup + _message_gen_in_measurement)){
+    _last_uid_in_measurement = _uid;
+  } else if(_message_generation_intervals == (_message_gen_in_warmup + _message_gen_in_measurement + _message_gen_in_cooldown)) {
+    _last_uid_in_simulation = _uid;
+  }
+}
+
+
+bool TrafficGenerator::more_generation_intervals() {
+  return (_message_generation_intervals < _message_gen_in_simulation);
+}
+
 void TrafficGenerator::generate_non_row_column_conflict_messages(long long int time, MessageQueue* message_queue) {
-	//printf("Generatubg Message\n");      
+	int message_size = 10;
+  if(!more_generation_intervals()) 
+      return;
+  //printf("Generatubg Message\n");      
   int num_of_transmitting_cores = rand_range(0, (unsigned int)_node_count-1);
-  int remaining_messages = MESSAGES_IN_SIMULATION - _generated_messages;     
-  if(num_of_transmitting_cores > remaining_messages)
-    num_of_transmitting_cores = remaining_messages;
 	for (int i=0; i < num_of_transmitting_cores; i++)
 		{
 			uint32_t src_x   = rand_range(0, _width-1);
@@ -45,19 +86,36 @@ void TrafficGenerator::generate_non_row_column_conflict_messages(long long int t
       uint32_t dest = dest_x * _height + dest_y;
 			uint32_t uid = get_uid();
 			LOG_DEBUG << "Adding Message: uid: " << uid << " source: " << src <<" dest: " << dest << std::endl;      
-			Message* msg = new Message(uid, src, dest, _message_size, _injection_period, _routing_table);
+			Message* msg = new Message(uid, src, dest, message_size, _routing_table);
 		  message_queue->add_message(src, msg, time);
       _generated_messages++;
+	    _generated_flits+= message_size;
+
     }
 		
-	
-}void TrafficGenerator::generate_messages(long long int time, MessageQueue* message_queue) {
-	//printf("Generatubg Message\n");      
+  update_message_generation_intervals();  	
+}
+
+void TrafficGenerator::generate_messages(long long int time, MessageQueue* message_queue) {
+  if(!more_generation_intervals()) {
+    return;
+  }
+	printf("Generatubg Message\n");      
   int num_of_transmitting_cores = rand_range(0, (unsigned int)_node_count-1);
-  int remaining_messages = MESSAGES_IN_SIMULATION - _generated_messages;     
-  if(num_of_transmitting_cores > remaining_messages)
-    num_of_transmitting_cores = remaining_messages;
-	for (int i=0; i < num_of_transmitting_cores; i++)
+  long long int queue_time = time; 
+	int message_size = 10;
+  double injection_rate_d = _injection_rate * pow(2,20);
+  printf("inj_rate %0F\n", injection_rate_d);
+  printf("_time_units_per_generation_period %0F\n", _time_units_per_generation_period);
+  printf("_time_units_per_sec %0F\n", _time_units_per_sec);
+  printf("message_size %d\n", message_size);
+  int num_messages = (injection_rate_d  * _time_units_per_generation_period)/ (_time_units_per_sec * message_size);
+  printf("Num Messages: %d", num_messages);
+  
+  long long int time_step = _time_units_per_generation_period  / num_messages;
+  int j =0;
+  while(j < num_messages) {
+    for (int i=0; i < num_of_transmitting_cores; i++)
 		{
 			uint32_t src   = rand_range(0, _node_count-1);
 			uint32_t dest  = rand_range(0, _node_count-1);
@@ -66,33 +124,50 @@ void TrafficGenerator::generate_non_row_column_conflict_messages(long long int t
         dest = rand_range(0, _node_count-1);  
       }
 			LOG_DEBUG << "Adding Message: uid: " << uid << " source: " << src <<" dest: " << dest << std::endl;      
-			Message* msg = new Message(uid, src, dest, _message_size, _injection_period, _routing_table);
-		  message_queue->add_message(src, msg, time);
+			Message* msg = new Message(uid, src, dest, message_size, _routing_table);
+		  message_queue->add_message(src, msg, queue_time);
       _generated_messages++;
+     	_generated_flits+= message_size;
+      j++;
+      queue_time += time_step;
+      if(j == num_messages) 
+        break;
     }
-		
-	
+  }	
+  update_message_generation_intervals();  	
 }
 
 void TrafficGenerator::generate_neighbor_messages(long long int time, MessageQueue* message_queue) {
+  if(!more_generation_intervals()) 
+      return;
   int num_of_transmitting_cores = rand_range(0, (unsigned int)_node_count-1);
 	//printf("Generatubg Message\n"); 
-  int remaining_messages = MESSAGES_IN_SIMULATION - _generated_messages;     
-  if(num_of_transmitting_cores > remaining_messages)
-    num_of_transmitting_cores = remaining_messages;
-
-	for (int i=0; i < num_of_transmitting_cores; i++)
+  long long int queue_time = time; 
+	int message_size = 10;
+  int num_messages = (_injection_rate  * _time_units_per_generation_period)/ (_time_units_per_sec * message_size);
+  long long int time_step = _time_units_per_generation_period  / num_messages;
+  int j =0;
+  while(j < num_messages) {
+    for (int i=0; i < num_of_transmitting_cores; i++)
 		{
 			uint32_t src   = rand_range(0, _node_count-1);
 			uint32_t dest  = (src + _height) % (_width * _height);
 			uint32_t uid = get_uid();
 			LOG_DEBUG << "Adding Message: uid: " << uid << " source: " << src <<" dest: " << dest << std::endl;      
-			Message* msg = new Message(uid, src, dest, _message_size, _injection_period, _routing_table);
-		  message_queue->add_message(src, msg, time);
+			Message* msg = new Message(uid, src, dest, message_size, _routing_table);
+		  message_queue->add_message(src, msg, queue_time);
       _generated_messages++;
+    	_generated_flits+= message_size;
+      j++;
+      queue_time += time_step;
+      if(j == num_messages) 
+        break;
     }
+  }	
+  update_message_generation_intervals();  	
+	
 }
-
+/*
 void TrafficGenerator::test_some_cores(long long int time, MessageQueue* message_queue) {
   int num_of_transmitting_cores = rand_range(0, (unsigned int)_node_count-1);
 	//printf("Generatubg Message\n");      
@@ -106,9 +181,11 @@ void TrafficGenerator::test_some_cores(long long int time, MessageQueue* message
 			uint32_t dest  = (src + _height) % (_width * _height);
 			uint32_t uid = get_uid();
 			LOG_DEBUG << "Adding Message: uid: " << uid << " source: " << src <<" dest: " << dest << std::endl;      
-			Message* msg = new Message(uid, src, dest, _message_size, _injection_period, _routing_table);
+			Message* msg = new Message(uid, src, dest, message_size, _injection_period, _routing_table);
 		  message_queue->add_message(src, msg, time);
       _generated_messages++;
+    	_generated_flits+= message_size;
+
     }
 }
 
@@ -122,11 +199,12 @@ void TrafficGenerator::conflict_test(long long int time, MessageQueue* message_q
 			uint32_t uid2 = get_uid();
 			LOG_DEBUG << "Adding Message: uid: " << uid1 << " source: " << src1 <<" dest: " << dest << std::endl;      
 			LOG_DEBUG << "Adding Message: uid: " << uid2 << " source: " << src2 <<" dest: " << dest << std::endl;      
-			Message* msg1 = new Message(uid1, src1, dest, _message_size, _injection_period, _routing_table);
-			Message* msg2 = new Message(uid2, src2, dest, _message_size, _injection_period, _routing_table);
+			Message* msg1 = new Message(uid1, src1, dest, message_size, _injection_period, _routing_table);
+			Message* msg2 = new Message(uid2, src2, dest, message_size, _injection_period, _routing_table);
 		  message_queue->add_message(src1, msg1, time);
 		  message_queue->add_message(src2, msg2, time);
       _generated_messages += 2;
+      _generated_flits += message_size;
 }
 
 void TrafficGenerator::conflict_test1(long long int time, MessageQueue* message_queue) {
@@ -138,9 +216,10 @@ void TrafficGenerator::conflict_test1(long long int time, MessageQueue* message_
  for(int i = 0; i < 7; i++) {
 		  uint32_t uid = get_uid(); 
       LOG_DEBUG << "Adding Message: uid: " << uid << " source: " << src_arr[i] <<" dest: " << dest_arr[i] << std::endl;      
-      Message* msg1 = new Message(uid, src_arr[i], dest_arr[i], _message_size, _injection_period, _routing_table);
+      Message* msg1 = new Message(uid, src_arr[i], dest_arr[i], message_size, _injection_period, _routing_table);
       message_queue->add_message(src_arr[i], msg1, time);
       _generated_messages ++;
+	    _generated_flits += message_size;
  }
 }
 void TrafficGenerator::generate_one_right_message(long long int time, MessageQueue* message_queue) {
@@ -148,23 +227,26 @@ void TrafficGenerator::generate_one_right_message(long long int time, MessageQue
 			uint32_t dest  = 63-8;
 			uint32_t uid = get_uid();
       LOG_DEBUG << "Adding Message: uid: " << uid << " source: " << src <<" dest: " << dest << std::endl;      
-	Message* msg = new Message(uid, src, dest, _message_size, _injection_period, _routing_table);
+	Message* msg = new Message(uid, src, dest, message_size, _injection_period, _routing_table);
 		  message_queue->add_message(src, msg, time);
       _generated_messages++;
+	    _generated_flits += message_size;
+
 }
+*/
+
+
+
+
 
 uint32_t TrafficGenerator::get_uid() {
-  int temp = _uid;
   _uid++;
   return _uid;
 }
-
-
-
-
 
 uint32_t TrafficGenerator::rand_range(uint32_t min, uint32_t max)
 {
 	double scaled = (double)rand()/RAND_MAX;
 	return (max - min + 1)*scaled +min;
-}}
+}
+}

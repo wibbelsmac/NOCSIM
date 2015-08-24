@@ -57,8 +57,8 @@ class Message {
     void generate_network_flit(NetworkFlit * NF ); 
     
   public:
-    Message(uint32_t uid, uint32_t src, uint32_t dest, uint32_t message_size, uint32_t injection_rate, RoutingTable* rt);
-    Message(uint32_t uid, uint32_t src, uint32_t dest, uint32_t message_size, uint32_t injection_rate, uint32_t address, int hop_count);
+    Message(uint32_t uid, uint32_t src, uint32_t dest, uint32_t message_size, RoutingTable* rt);
+    Message(uint32_t uid, uint32_t src, uint32_t dest, uint32_t message_size, uint32_t address, int hop_count);
     Message();
     ~Message();
     inline uint32_t uid() {return _uid; };

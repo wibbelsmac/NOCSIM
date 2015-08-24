@@ -5,7 +5,6 @@ extern "C" {
 
 MessageQueue::MessageQueue (int width, int height) {
   init(width, height);
-  _oracle = new Oracle();
 }
 
 
@@ -27,10 +26,10 @@ void MessageQueue::add_message(int index, Message* msg, long long int time) {
   if(!_message_queues[index].empty()) {
     long long int last_flit_time =  _message_queues[index].back()->last_enter_queue_time();
     long long int actual_enter_time = (time > last_flit_time) ? time : last_flit_time;
-    _queued_flits += MESSAGE_SIZE;
+    _queued_flits += msg->message_size();
     msg->adding_message_to_queue(actual_enter_time);
   } else {
-    _queued_flits += MESSAGE_SIZE;
+    _queued_flits += msg->message_size();
     msg->adding_message_to_queue(time);
   }
   _message_queues[index].push(msg);
@@ -59,9 +58,6 @@ NetworkFlit MessageQueue::add_flit_to_network(int index, long long int time) {
     if(message_temp_ptr->adding_flit_to_network(time, &NF)) {
 	   LOG_DEBUG << "Adding flit "  << message_temp_ptr->sent_flits() << " of " <<  message_temp_ptr->message_size() << " at index " << index << " with uid: " << message_temp_ptr->uid() << " at time: " << time << "\n";
       _transit_flits++;
-      if(message_temp_ptr->sent_flits() == 1) { 
-        _oracle->add_message(message_temp_ptr); 
-      }
       if(message_temp_ptr->unsent_messages() == 0) {
         _message_queues[index].pop();
       }
@@ -85,7 +81,6 @@ void MessageQueue::remove_flit_from_network(uint32_t uid, uint32_t index, long l
         std::cout << "Received flit from correct index expected:" << msg->dest_index() << " Received: " << index << std::endl;
       }
       if(msg->removing_flit_from_network(time)) {
-        _oracle->remove_message(msg);
         printf("msg removed with uid %d and latency %lld\n", uid, msg->latency());
        _completed_messages++;
       } 
@@ -100,7 +95,7 @@ bool MessageQueue::pending_messages(int index, long long int time) {
 	if(!_message_queues[index].empty()) {  
 			//printf("Message queue is not empty\n");		
 			if(_message_queues[index].front()->message_ready(time)) {
-        return !(_oracle->test_message_for_cycle(_message_queues[index].front()));
+        return true;
       }
 		}
 	//printf("No Messages in  queue\n");  

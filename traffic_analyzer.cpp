@@ -18,7 +18,7 @@ TrafficAnalyzer::TrafficAnalyzer() {
 }
 
 
-void TrafficAnalyzer::analyze_message_queue(MessageQueue* message_queue, uint32_t injection_rate, uint32_t min_uid, uint32_t max_uid) {
+void TrafficAnalyzer::analyze_message_queue(MessageQueue* message_queue, uint32_t injection_rate, uint32_t min_uid, uint32_t max_uid, int total_flits) {
   double message_count = 0;
   int analyzed_messages = 0;
   double measured_flit_count = 0.0;
@@ -116,7 +116,7 @@ void TrafficAnalyzer::analyze_message_queue(MessageQueue* message_queue, uint32_
   RESULTS_FILE << SIMULATION_IDENTIFIER <<  std::fixed << std::setprecision(8) 
   << "\t" <<  std::fixed << std::setprecision(8) << injection_rate
   << "\t" <<  std::fixed << std::setprecision(8) << (measured_flit_count + non_measured_flit_count) << "/"
-  <<          std::fixed << std::setprecision(8) << (MESSAGES_IN_SIMULATION * MESSAGE_SIZE)
+  <<          std::fixed << std::setprecision(8) << (total_flits)
   << "\t" <<  std::fixed << std::setprecision(8) << total_hop_count
   << "\t" <<  std::fixed << std::setprecision(8) << min_message_latency_per_hop 
   << "\t" <<  std::fixed << std::setprecision(8) << max_message_latency_per_hop 
@@ -136,7 +136,7 @@ void TrafficAnalyzer::analyze_message_queue(MessageQueue* message_queue, uint32_
   << "\t" <<  std::fixed << std::setprecision(8) << injection_rate
   << "\t" <<  std::fixed << std::setprecision(8) << total_hop_count 
   << "\t" <<  std::fixed << std::setprecision(8) << (measured_flit_count + non_measured_flit_count) << "/" 
-  <<          std::fixed << std::setprecision(8) << (MESSAGES_IN_SIMULATION * MESSAGE_SIZE)
+  <<          std::fixed << std::setprecision(8) << (total_flits)
   << "\t" <<  std::fixed << std::setprecision(8) << min_message_latency_per_hop 
   << "\t" <<  std::fixed << std::setprecision(8) << max_message_latency_per_hop 
   << "\t" <<  std::fixed << std::setprecision(8) << avg_message_latency_per_hop 

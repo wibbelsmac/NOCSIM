@@ -18,7 +18,7 @@ class TrafficAnalyzer {
     void add_message_vector_to_queue(std::vector< Message *>* msg_vect);
     void add_flit_to_network(uint32_t uid, uint64_t time); 
     void remove_flit_from_network(uint32_t uid, uint64_t time);
-    void analyze_message_queue(MessageQueue* message_queue, uint32_t injection_ratei, uint32_t min_uid, uint32_t max_uid);
+    void analyze_message_queue(MessageQueue* message_queue, uint32_t injection_ratei, uint32_t min_uid, uint32_t max_uid, int total_flits);
     void init_results_file(); 
 };
 #endif

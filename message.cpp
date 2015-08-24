@@ -7,7 +7,7 @@
 
 extern "C" {
 
-Message::Message (uint32_t uid, uint32_t src, uint32_t dest, uint32_t message_size, uint32_t injection_rate, RoutingTable* rt) {
+Message::Message (uint32_t uid, uint32_t src, uint32_t dest, uint32_t message_size, RoutingTable* rt) {
   _uid = uid;
 	_source_index = src;
 	_destination_index = dest;
@@ -21,17 +21,17 @@ Message::Message (uint32_t uid, uint32_t src, uint32_t dest, uint32_t message_si
   _first_receive_time = 0;
 
 
-   _min_flit_latency = 0;
-   _max_flit_latency = 0;
-   _min_flit_transmission_time = 0;
-   _max_flit_transmission_time = 0;
+  _min_flit_latency = 0;
+  _max_flit_latency = 0;
+  _min_flit_transmission_time = 0;
+  _max_flit_transmission_time = 0;
 
-_first_enter_queue_time = 0;
-_last_enter_queue_time = 0;
-_first_leave_network_time = 0;
-_last_leave_network_time = 0;
-_first_enter_network_time = 0;
-_last_enter_network_time = 0;
+  _first_enter_queue_time = 0;
+  _last_enter_queue_time = 0;
+  _first_leave_network_time = 0;
+  _last_leave_network_time = 0;
+  _first_enter_network_time = 0;
+  _last_enter_network_time = 0;
 			
     
   // initialize vector
@@ -40,11 +40,10 @@ _last_enter_network_time = 0;
   }
   _sent_flits = 0;
   _received_flits = 0;
-	_injection_rate = injection_rate;
 }
 
 
-Message::Message (uint32_t uid, uint32_t src, uint32_t dest, uint32_t message_size, uint32_t injection_rate, uint32_t address, int hop_count) {
+Message::Message (uint32_t uid, uint32_t src, uint32_t dest, uint32_t message_size, uint32_t address, int hop_count) {
   _uid = uid;
 	_source_index = src;
 	_destination_index = dest;
@@ -78,7 +77,6 @@ _last_enter_network_time = 0;
   }
   _sent_flits = 0;
   _received_flits = 0;
-	_injection_rate = injection_rate;
 }
 
 
@@ -101,7 +99,6 @@ void Message::adding_message_to_queue(long long int time) {
    _queued_flits = _flit_vector->size();
    for(uint i = 0; i < _flit_vector->size(); i++) {
     (*_flit_vector)[i]->enter_queue_time(enter_queue_time);
-    enter_queue_time += _injection_rate;
   }
   _last_enter_queue_time = enter_queue_time;
 }
@@ -218,7 +215,7 @@ int Message::unsent_messages() {
 }
 
 long long int Message::last_enter_queue_time() {
-  return _first_enter_queue_time + (_injection_rate * (_message_size -1));
+  return _first_enter_queue_time;
 }
 
 long long int Message::transmission_time() {

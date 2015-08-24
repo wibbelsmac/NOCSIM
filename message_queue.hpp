@@ -5,7 +5,6 @@
 #include <queue>
 #include <map>
 #include "message.hpp"
-#include "oracle.hpp"
 
 extern "C" {
 
@@ -18,7 +17,6 @@ class MessageQueue {
     typedef std::map <uint32_t, Message*> MessageMap;
     typedef MessageMap::iterator MessageMapIterator;
     MessageMap _completed_message_queue;
-    Oracle * _oracle;
 
     uint32_t _completed_messages;
     uint32_t _queued_messages;  

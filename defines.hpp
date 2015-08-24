@@ -12,15 +12,19 @@ extern std::ofstream RESULTS_FILE;
 #define LOG_ERROR ERROR_FILE << LOCATION
 #define LOG_DEBUG LOG_FILE << LOCATION
 
-extern int INJECTION_RATE;
-extern int MESSAGE_SIZE;
-extern int MESSAGES_IN_SIMULATION;
-extern int MESSAGES_IN_WARMUP;
-extern int MEASSAGES_IN_MEASUREMENT;
+//extern int INJECTION_RATE;
+//extern int MESSAGE_SIZE;
+//extern int MESSAGES_IN_SIMULATION;
+//extern int MESSAGES_IN_WARMUP;
+//extern int MEASSAGES_IN_MEASUREMENT;
 extern int SHORT_HOP_COST;
 extern int LONG_HOP_COST;
 extern int ROUTE_MODE; // either XY or ZIG_ZAG
-
+extern double AGGREGATION_LEVEL;
+extern double BIAS_PARAM;
+extern double TIME_UNITS_PER_SEC;
+extern double TIME_UINTS_PER_MESSAGE_GENERATION_PERIOD;
+extern int BYTES_PER_FLIT;
 extern std::string ERROR_FILENAME;
 extern std::string LOG_FILENAME;
 extern std::string RESULTS_FILENAME;

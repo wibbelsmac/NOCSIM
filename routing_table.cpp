@@ -39,7 +39,7 @@ uint32_t RoutingTable::generate_route_addr32(int source, int dest, uint32_t* hop
 	}
   *hop_count = abs(x_delta) + abs(y_delta);
   //std::cout << "x_delta " << x_delta << " Y_delta " << y_delta <<std::endl;
-  printf("Creating addr bits wiht hop_count: %d, xdif: %d, ydif: %d\n", *hop_count, x_delta, y_delta);
+  //printf("Creating addr bits wiht hop_count: %d, xdif: %d, ydif: %d\n", *hop_count, x_delta, y_delta);
 	if(mode == XY)
     return generate_route_addr_bits(x_delta, y_delta);
   else if(mode == ZIG_ZAG) 
@@ -122,7 +122,6 @@ uint32_t RoutingTable::generate_zig_zag_route_addr_bits(int x_delta, int y_delta
 	uint32_t y_direction_bit = (y_delta > 0) ? NORTH_bit : SOUTH_bit; 
 	uint32_t y_exit_direction_bit = (y_delta > 0) ? SOUTH_bit : NORTH_bit;
 	uint32_t address = 0;
-  std::cout << "x_delta " << x_delta << " Y_delta " << y_delta <<std::endl;
 	int x = abs(x_delta);
   int y = abs(y_delta);
   uint32_t exit_direction_bit = (x > y) ? x_exit_direction_bit : y_exit_direction_bit;

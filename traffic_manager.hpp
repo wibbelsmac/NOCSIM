@@ -16,15 +16,21 @@ class TrafficManager {
     int _width;
     int _height;
 		int _message_size;
-		int _injection_period;
+		int _injection_rate;
     int _update_count;
     int remove_count;
+    int _message_gen_in_warmup, _message_gen_in_measurement, _message_gen_in_cooldown;
+    double _time_units_per_sec;
+    double _time_units_per_message_generation;
     //TrafficGenerator _traffic_generator;
     MessageQueue _message_queue;  
     TrafficGenerator* _traffic_generator; 
     TrafficAnalyzer _traffic_analyzer;    
   public:
-    TrafficManager(int width, int height, int message_count);
+    TrafficManager(int width, int height, int message_gen_in_warmup, int message_gen_in_measurement, 
+                   int message_gen_in_cooldown, int injection_rate, double time_units_per_sec, 
+                   double time_units_per_generation_period);
+  
     ~TrafficManager();
     void generate_messages(int time);
     bool pending_socket_message(int index, long long int time);

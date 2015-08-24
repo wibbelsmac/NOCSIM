@@ -1,4 +1,4 @@
-`timescale 100ps/1ns 
+`timescale 10ps/1ps 
 
 `include "defines.v"
 
@@ -11,9 +11,9 @@ typedef struct packed{
 } NetworkFlit; 
 
 
-export "DPI-C" function export_func; 
+//export "DPI-C" function export_func; 
 //export "DPI-C" function simulation_time; 
-import "DPI-C" context function void import_func(); 
+//import "DPI-C" context function void import_func(); 
 //import "DPI-C" function void init(); 
 import "DPI-C" function void terminate(input chandle); 
 import "DPI-C" function int message_generation_period(); 
@@ -26,7 +26,9 @@ import "DPI-C" function void remove_packet_from_network(input chandle, input  lo
 import "DPI-C" string_sv2c=task string_sv2c(string str);
 
 import "DPI-C" function void init (string log_filename, string error_filename, string results_filename, string sim_id, string topology, string trfic_ptrn, input int injection_rate,
-  input int message_size, input int messages_in_sim, input int messages_in_warm, input int messages_in_meas, input int short_hop_cost, input int long_hop_cost, int route_mode);
+  input int message_size, input int messages_in_sim, input int messages_in_warm, input int messages_in_meas, input int short_hop_cost, input int long_hop_cost, int route_mode,
+  input int aggregation_level, input real time_units_per_sec, input real time_units_per_message_generation, input real bias_param, input int bytes_per_flit,
+  input int message_generations_in_warmup, input int message_generations_in_measurement, input int message_generations_in_cooldown);
 
 chandle tm_inst;
 
@@ -63,13 +65,23 @@ integer vcdstart;
   int total_messages_in_simulation;
   int messages_in_warmup;
   int messages_in_measurement;
+  int messages_in_cooldown;
+  int message_generations_in_warmup;
+  int message_generations_in_measurement;
+  int message_generations_in_cooldown;
   int short_hop_cost;
   int long_hop_cost;
   int max_runtime = 100000000;
   int route_mode = 0;
   bit inited = 1'b0;
+  int aggregation_level = 7;
+  int bytes_per_flit = 5;  
+
+  real bias_param = 0.8;
   longint last_removed_time = 0;
   longint between_removes_timeout = 15000000; 
+  longint time_units_per_sec = 1e11;
+  longint time_units_per_message_generation;
   reg [31:0] addr_temp;
 
  
@@ -121,7 +133,7 @@ endtask
 int generate_delay = message_generation_period();
 
 always begin
-  #(generate_delay);
+  #(time_units_per_message_generation);
   if(inited == 1'b1) begin
     generate_messages(tm_inst, $time);
     add_data_to_network();
@@ -140,7 +152,7 @@ always @(rr_C_delay) begin
   //if(inited == 1'b1) begin
     remove_data_from_network();
   //end else begin
-  //  #3;
+  //  #30;
   // end
 end
 
@@ -154,9 +166,9 @@ grid8 Grid8(
   .ra_C(ra_C), 
   .din_C(din_C));
 
- assign #(2) lr_C = lr_C_updates;
+ assign #(20) lr_C = lr_C_updates;
  assign  ra_C = ra_C_updates;
- assign #(1) rr_C_delay = rr_C;
+ assign #(10) rr_C_delay = rr_C;
 
 string str;
 
@@ -165,107 +177,151 @@ begin
 
 // Ugh Getting params from the command line isn't pretty
 
-   if($value$plusargs("log_file=%s", log_file)) begin
+  if($value$plusargs("log_file=%s", log_file)) begin
     $display("Log Filename %0s", log_file);
-   end else begin
+  end else begin
     $display("Warning Log Not provided using \"network_sim.log\"");
     log_file = "netowrk_sim.log";
-   end
+  end
 
-   if($value$plusargs("error_file=%s", error_file)) begin
-    $display("Error Filename %0s", error_file);
-   end else begin
-    $display("Warning Error File not provided using \"network_sim_error.err\"");
-    error_file = "network_sim_error.err";
-   end
+  if($value$plusargs("error_file=%s", error_file)) begin
+      $display("Error Filename %0s", error_file);
+  end else begin
+      $display("Warning Error File not provided using \"network_sim_error.err\"");
+      error_file = "network_sim_error.err";
+  end
 
-   if($value$plusargs("results_file=%s", results_file)) begin
-    $display("Results Filename %0s", results_file);
-   end else begin
-    $display("Warning Results File not provided, using: \"network_sim_results.txt\"");
-    results_file = "network_sim_results.txt";
-   end
+  if($value$plusargs("results_file=%s", results_file)) begin
+      $display("Results Filename %0s", results_file);
+  end else begin
+      $display("Warning Results File not provided, using: \"network_sim_results.txt\"");
+      results_file = "network_sim_results.txt";
+  end
 
-   if($value$plusargs("sim_id=%s", sim_id)) begin
-    $display("simulation_id %0s", sim_id);
-   end else begin
-    sim_id = "torus_random_10";
-   end  
-  
-   if($value$plusargs("topology=%s", topology)) begin
-    $display("topology %0s", topology);
-   end else begin
-    topology = "torus";
-   end
+  if($value$plusargs("sim_id=%s", sim_id)) begin
+      $display("simulation_id %0s", sim_id);
+  end else begin
+      sim_id = "torus_random_10";
+  end  
+    
+  if($value$plusargs("topology=%s", topology)) begin
+      $display("topology %0s", topology);
+  end else begin
+      topology = "torus";
+  end
 
-   if($value$plusargs("traf_ptrn=%s", traffic_pattern)) begin
-    $display("Traffic %0s", traffic_pattern);
-   end else begin
-    traffic_pattern = "random";
-   end
+  if($value$plusargs("traf_ptrn=%s", traffic_pattern)) begin
+      $display("Traffic %0s", traffic_pattern);
+  end else begin
+      traffic_pattern = "random";
+  end
 
-   if($value$plusargs("inj_rate=%d", injection_rate)) begin
-    $display("Injection_rate %d", injection_rate);
-   end else begin
-    $display("Injection rate not provided, using: 8");
-    injection_rate = 8; 
-  end 
-
-  if($value$plusargs("msg_size=%d", message_size)) begin
-    $display("Message size: %d", message_size);
-   end else begin
-    $display("Message size not provided, using: 8");
-    message_size= 8; 
+  if($value$plusargs("injection_rate=%d", injection_rate)) begin
+      $display("Injection_rate %d", injection_rate);
+  end else begin
+      $display("Injection rate not provided, using: 8");
+      injection_rate = 8; 
   end 
 
 
   if($value$plusargs("msg_in_sim=%d", total_messages_in_simulation)) begin
     $display("Message in simulation: %d", total_messages_in_simulation);
-   end else begin
+  end else begin
     $display("Message in Simulation not provided, using: 100");
     total_messages_in_simulation = 100;
   end 
 
- if($value$plusargs("msg_in_wrm=%d", messages_in_warmup)) begin
+  if($value$plusargs("msg_in_wrm=%d", messages_in_warmup)) begin
     $display("Message in warmup: %d", messages_in_warmup);
-   end else begin
+  end else begin
     $display("Message in warmup not provided, using: 20");
     messages_in_warmup = 20;
   end  
 
- if($value$plusargs("msg_in_mes=%d", messages_in_measurement)) begin
+  if($value$plusargs("msg_in_mes=%d", messages_in_measurement)) begin
     $display("Message in measurement: %d", messages_in_measurement);
-   end else begin
+  end else begin
     $display("Message in measure not provided, using: 60");
     messages_in_measurement = 60;
   end  
 
-if($value$plusargs("shop_cst=%d", short_hop_cost)) begin
+  if($value$plusargs("shop_cst=%d", short_hop_cost)) begin
     $display("Short Hop Cost: %d", short_hop_cost);
-   end else begin
+  end else begin
     $display("Short Hop Cost Not provided, using: 1");
     short_hop_cost= 1;
   end  
 
-if($value$plusargs("lhop_cst=%d", long_hop_cost)) begin
+  if($value$plusargs("lhop_cst=%d", long_hop_cost)) begin
     $display("Long Hop Cost: %d", long_hop_cost);
-   end else begin
+  end else begin
     $display("Long Hop Cost Not provided, using: 1");
     long_hop_cost= 1;
   end  
 
-if($value$plusargs("route_mode=%d", route_mode)) begin
+  if($value$plusargs("route_mode=%d", route_mode)) begin
     $display("route_mode: %d", route_mode);
-   end else begin
+  end else begin
     $display("Route_mode not provided using: 0");
-    long_hop_cost= 1;
   end  
 
-// phewww done with that
+  if($value$plusargs("aggregation_level=%d", aggregation_level)) begin
+    $display("aggregation_level: %d", aggregation_level);
+  end else begin
+    $display("aggregation level not provided");
+  end  
+
+  if($value$plusargs("bias_param=%0F", bias_param)) begin
+    $display("route_mode: %0F", bias_param);
+  end else begin
+    $display("bias_param not provided");
+  end  
+
+  if($value$plusargs("time_units_per_sec=%0F", time_units_per_sec)) begin
+    $display("time_units_per_sec: %lld", time_units_per_sec);
+  end else begin
+    $display("time_units_per_sec not provided");
+  end  
+
+  if($value$plusargs("time_units_per_message_generation=%0F", time_units_per_message_generation)) begin
+    $display("time_units_per_message_generation: %lld", time_units_per_message_generation);
+  end else begin
+    $display("time_units_per_message_generation not provided");
+  end  
+
+  if($value$plusargs("bytes_per_flit=%d", bytes_per_flit)) begin
+    $display("bytes_per_flit: %d", bytes_per_flit);
+  end else begin
+    $display("Bytes per flit not provided");
+  end 
+
+  if($value$plusargs("mes_gen_in_warm=%d", message_generations_in_warmup)) begin
+    $display("message_generations_in_warmup: %d", message_generations_in_warmup);
+  end else begin
+    $display("message_generations_in_warmup not provided");
+  end 
+
+  if($value$plusargs("mes_gen_in_meas=%d", message_generations_in_measurement)) begin
+    $display("message_generations_in_measurement: %d", message_generations_in_measurement);
+  end else begin
+    $display("message_generations_in_measurement not provided");
+  end 
+
+  if($value$plusargs("mes_gen_in_cool=%d", message_generations_in_cooldown)) begin
+    $display("message_generations_in_cooldown: %d", message_generations_in_cooldown);
+  end else begin
+    $display("message_generations_in_cooldown not provided");
+  end 
 
 
-init(log_file, error_file, results_file, sim_id, topology, traffic_pattern, injection_rate, message_size, total_messages_in_simulation, messages_in_warmup, 
-     messages_in_measurement, short_hop_cost, long_hop_cost, route_mode); // MUST BE CALLED BEFORE ANYTHING ELSE
+
+
+  // phewww done with that
+
+
+  init(log_file, error_file, results_file, sim_id, topology, traffic_pattern, injection_rate, message_size, total_messages_in_simulation, messages_in_warmup, 
+     messages_in_measurement, short_hop_cost, long_hop_cost, route_mode, aggregation_level, time_units_per_sec, time_units_per_message_generation, bias_param, bytes_per_flit,
+     message_generations_in_warmup, message_generations_in_measurement, message_generations_in_cooldown); // MUST BE CALLED BEFORE ANYTHING ELSE
 
 
 tm_inst = get_tm(); // holds the state of the entire simulation
@@ -276,9 +332,9 @@ activity_reg = {(`Grid_Size * `Activity_data / 2){2'b10}};
   lr_C_updates = {`Grid_Size{0}};
   ra_C_updates = {`Grid_Size{0}};
   rst = 1'b1;
-  #20;
+  #200;
   rst = 1'b0;
-  #20;
+  #200;
   //vcd Start
 	$dumpfile("grid8.vcd");
 	$dumpvars(0, "Grid8");
@@ -293,7 +349,7 @@ activity_reg = {(`Grid_Size * `Activity_data / 2){2'b10}};
  
     //add_data_to_network();
     //remove_data_from_network();
-    #1;
+    #10;
     //$display("Simulation Complete Returned  %d\n", simulation_complete());
   end while((!simulation_complete(tm_inst)) && ($time <= max_runtime)); // && (($time - last_removed_time) < between_removes_timeout));
 	if (simulation_complete(tm_inst)) begin
