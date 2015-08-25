@@ -5,6 +5,9 @@
 #include "message.hpp"
 #include "routing_table.hpp"
 #include "message_queue.hpp"
+#include <utility>
+
+typedef  std::pair<int, double>  BModelPair;
 
 //#include "traffic_generator.hpp"
 
@@ -36,6 +39,7 @@ class TrafficGenerator {
     bool more_generation_intervals();
     void test_some_cores(long long int time, MessageQueue* message_queue);
     void generate_messages(long long int time, MessageQueue* message_queue);
+    void generate_bursty_traffic(long long int time, MessageQueue* message_queue);
     void generate_non_row_column_conflict_messages(long long int time, MessageQueue* message_queue);
     void generate_neighbor_messages(long long int time, MessageQueue* message_queue); 
     void generate_one_right_message(long long int time, MessageQueue* message_queue); 

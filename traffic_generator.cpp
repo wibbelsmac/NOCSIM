@@ -6,6 +6,9 @@
 #include "defines.hpp"
 #include <time.h>       /* time */
 #include <math.h>
+#include <stack>
+
+
 extern "C" {
 
 
@@ -100,17 +103,11 @@ void TrafficGenerator::generate_messages(long long int time, MessageQueue* messa
   if(!more_generation_intervals()) {
     return;
   }
-	printf("Generatubg Message\n");      
   int num_of_transmitting_cores = rand_range(0, (unsigned int)_node_count-1);
   long long int queue_time = time; 
 	int message_size = 10;
   double injection_rate_d = _injection_rate * pow(2,20);
-  printf("inj_rate %0F\n", injection_rate_d);
-  printf("_time_units_per_generation_period %0F\n", _time_units_per_generation_period);
-  printf("_time_units_per_sec %0F\n", _time_units_per_sec);
-  printf("message_size %d\n", message_size);
   int num_messages = (injection_rate_d  * _time_units_per_generation_period)/ (_time_units_per_sec * message_size);
-  printf("Num Messages: %d", num_messages);
   
   long long int time_step = _time_units_per_generation_period  / num_messages;
   int j =0;
@@ -136,6 +133,68 @@ void TrafficGenerator::generate_messages(long long int time, MessageQueue* messa
   }	
   update_message_generation_intervals();  	
 }
+
+void TrafficGenerator::generate_bursty_traffic(long long int time, MessageQueue* message_queue) {
+  if(!more_generation_intervals()) {
+    return;
+  }
+	printf("Generatubg Message\n");      
+  long long int queue_time = time; 
+  double injection_rate_d = _injection_rate * pow(2,20);
+  int n = pow(2,AGGREGATION_LEVEL);
+  double time_step = double(_time_units_per_generation_period)  / double(n);
+  double message_volume = (injection_rate_d  * _time_units_per_generation_period)/ (_time_units_per_sec); 
+  double number_of_flits_per_transmission = message_volume / double(BYTES_PER_FLIT);
+  
+    for (int i=0; i < _node_count; i++)
+		{
+      int b_model_message_index = 0;
+      std::stack< BModelPair > message_stack;
+      int N = pow(2,AGGREGATION_LEVEL);
+      message_stack.push(std::make_pair(0,number_of_flits_per_transmission));
+      while(!message_stack.empty()) {
+        printf("Generating message %d/%d",b_model_message_index,N);
+        BModelPair b_model_pair = message_stack.top();
+        int k = b_model_pair.first;
+        double v = b_model_pair.second;
+        message_stack.pop();
+        if(k == AGGREGATION_LEVEL) { // send message
+			    uint32_t src = i;
+          uint32_t dest  = rand_range(0, _node_count-1);
+          uint32_t uid = get_uid();
+          int message_size = v;
+          long long int queue_time = double(b_model_message_index) * time_step + time;  
+          while (src == dest) {
+            dest = rand_range(0, _node_count-1);  
+          }
+          LOG_DEBUG << "Adding Message: uid: " << uid << " source: " << src <<" dest: " << dest << std::endl;      
+          if(v >0) {
+            Message* msg = new Message(uid, src, dest, message_size, _routing_table);
+            message_queue->add_message(src, msg, queue_time);
+            _generated_messages++;
+            _generated_flits+= message_size;
+          }
+          b_model_message_index++;
+        } else {
+          int heads_tails = rand_range(0,1);
+          double remaining_volume_fraction = v * (1.0 - BIAS_PARAM);
+          int remaining_volume = round(remaining_volume_fraction);
+          int majority_voume = v - remaining_volume;
+          
+          if(heads_tails == 0) {
+            message_stack.push(std::make_pair(k+1, majority_voume));
+            message_stack.push(std::make_pair(k+1, remaining_volume));
+          } else if(heads_tails == 1) {
+            message_stack.push(std::make_pair(k+1, remaining_volume));
+            message_stack.push(std::make_pair(k+1, majority_voume));
+          }
+        }
+
+      }
+    }
+  update_message_generation_intervals();  	
+}
+
 
 void TrafficGenerator::generate_neighbor_messages(long long int time, MessageQueue* message_queue) {
   if(!more_generation_intervals()) 

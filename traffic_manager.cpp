@@ -34,8 +34,8 @@ void TrafficManager::generate_messages(int time) {
   //LOG_DEBUG << "Running Generate Messages method in traffic Manager\n");
     if(TRAFFIC_PATTERN.compare("random") == 0) {
       _traffic_generator->generate_messages(time, &_message_queue);
-   // }else if(TRAFFIC_PATTERN.compare("neighbor") == 0) {
-   //   _traffic_generator->generate_neighbor_messages(time, &_message_queue);
+   }else if(TRAFFIC_PATTERN.compare("bmodel") == 0) {
+      _traffic_generator->generate_bursty_traffic(time, &_message_queue);
    // }else if(TRAFFIC_PATTERN.compare("test") == 0) {
    //   _traffic_generator->test_some_cores(time, &_message_queue);
    // }else if(TRAFFIC_PATTERN.compare("test1") == 0) {
